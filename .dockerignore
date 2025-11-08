@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+*.md
+!README.md
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Test files
+test_*.py
+*_test.py
+
+# Unnecessary files
+main_fixed.py
+main_simple.py
+main_manual.py
+CLAUDE*.md
+.claude/

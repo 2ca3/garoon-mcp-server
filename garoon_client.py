@@ -1,0 +1,272 @@
+"""Garoon API Client
+
+A Python client for interacting with Garoon REST API using X-Cybozu-Authorization header.
+"""
+
+import aiohttp
+import asyncio
+import json
+import logging
+import base64
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from urllib.parse import urljoin
+
+logger = logging.getLogger(__name__)
+
+class GaroonAPIError(Exception):
+    """Custom exception for Garoon API errors"""
+    pass
+
+class GaroonClient:
+    """Garoon REST API client using X-Cybozu-Authorization header"""
+
+    def __init__(self, base_url: str, g_username: str, g_password: str):
+        """
+        Initialize Garoon client
+
+        Args:
+            base_url: Garoon base URL (e.g., https://your-garoon.cybozu.com)
+            g_username: Garoon API username
+            g_password: Garoon API password
+        """
+        self.base_url = base_url.rstrip('/')
+        self.g_username = g_username
+        self.g_password = g_password
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.authenticated = False
+
+        # Create Garoon token like GAS example: base64Encode(username + ':' + password)
+        g_credentials = f"{g_username}:{g_password}"
+        self.garoon_token = base64.b64encode(g_credentials.encode('utf-8')).decode('utf-8')
+
+    async def __aenter__(self) -> 'GaroonClient':
+        """Async context manager entry"""
+        await self.authenticate()
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit"""
+        await self.close()
+
+    async def authenticate(self) -> None:
+        """Authenticate with Garoon using X-Cybozu-Authorization header"""
+        if self.session is None:
+            # Try different header formats commonly used by Cybozu products
+            headers = {
+                'X-Cybozu-Authorization': self.garoon_token,
+                'Content-Type': 'application/json',
+                'User-Agent': 'GaroonMCPServer/1.0'
+            }
+            self.session = aiohttp.ClientSession(headers=headers)
+        
+        try:
+            # Test with schedule API (commonly available endpoint)
+            url = urljoin(self.base_url, "/g/api/v1/schedule/events")
+            params: Dict[str, str] = {
+                'limit': '1',
+                'fields': 'id,subject'
+            }
+            async with self.session.get(url, params=params) as response:
+                response_text = await response.text()
+                logger.info(f"Auth test response: {response.status}, content: {response_text[:200]}")
+                
+                if response.status == 200:
+                    self.authenticated = True
+                    logger.info("Successfully authenticated with Garoon using X-Cybozu-Authorization header")
+                else:
+                    raise GaroonAPIError(f"Authentication failed: {response.status} - {response_text}")
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            await self.close()  # Ensure session is closed on error
+            raise GaroonAPIError(f"Authentication failed: {e}")
+    
+
+    async def close(self) -> None:
+        """Close the HTTP session"""
+        if self.session:
+            await self.session.close()
+            self.session = None
+            self.authenticated = False
+
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Dict[str, Any]:
+        """Make HTTP request to Garoon API"""
+        if not self.authenticated:
+            await self.authenticate()
+
+        if self.session is None:
+            raise GaroonAPIError("Session not initialized")
+
+        url = urljoin(self.base_url, endpoint)
+
+        try:
+            async with self.session.request(method, url, **kwargs) as response:
+                if response.status == 200:
+                    result: Dict[str, Any] = await response.json()
+                    return result
+                else:
+                    error_text = await response.text()
+                    raise GaroonAPIError(f"API request failed: {response.status} - {error_text}")
+        except aiohttp.ClientError as e:
+            logger.error(f"HTTP request error: {e}")
+            raise GaroonAPIError(f"Request failed: {e}")
+    
+    async def get_schedule(self, start_date: str, end_date: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get schedule events
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            user_id: Optional user ID filter (Garoon user ID)
+
+        Returns:
+            List of schedule events
+        """
+        endpoint = "/g/api/v1/schedule/events"
+        params: Dict[str, str] = {
+            "rangeStart": f"{start_date}T00:00:00Z",
+            "rangeEnd": f"{end_date}T23:59:59Z"
+        }
+
+        # targetパラメータを指定する場合、targetTypeも必須
+        # 参考: https://cybozu.dev/ja/garoon/docs/rest-api/schedule/get-schedule-events/
+        if user_id:
+            params["target"] = user_id
+            params["targetType"] = "user"
+
+        response = await self._make_request("GET", endpoint, params=params)
+        events: List[Dict[str, Any]] = response.get("events", [])
+        return events
+    
+    async def create_schedule(self, subject: str, start_datetime: str, end_datetime: str, 
+                            description: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new schedule event
+        
+        Args:
+            subject: Event subject/title
+            start_datetime: Start datetime in ISO format
+            end_datetime: End datetime in ISO format
+            description: Optional event description
+            
+        Returns:
+            Created event information
+        """
+        endpoint = "/g/api/v1/schedule/events"
+        
+        event_data = {
+            "subject": {"value": subject},
+            "start": {"dateTime": start_datetime},
+            "end": {"dateTime": end_datetime}
+        }
+        
+        if description:
+            event_data["notes"] = {"value": description}
+            
+        response = await self._make_request("POST", endpoint, json=event_data)
+        return response
+    
+    async def get_messages(self, folder: str = "inbox", limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Get messages from specified folder
+        
+        Args:
+            folder: Folder name (inbox, sent, etc.)
+            limit: Maximum number of messages to retrieve
+            
+        Returns:
+            List of messages
+        """
+        endpoint = "/g/api/v1/mail/messages"
+        params = {
+            "folder": folder,
+            "limit": limit
+        }
+
+        response = await self._make_request("GET", endpoint, params=params)
+        messages: List[Dict[str, Any]] = response.get("messages", [])
+        return messages
+    
+    async def send_message(self, to: List[str], subject: str, body: str) -> Dict[str, Any]:
+        """
+        Send a message
+        
+        Args:
+            to: List of recipient user IDs or email addresses
+            subject: Message subject
+            body: Message body
+            
+        Returns:
+            Sent message information
+        """
+        endpoint = "/g/api/v1/mail/messages"
+        
+        message_data = {
+            "to": [{"name": recipient, "emailAddress": recipient} for recipient in to],
+            "subject": subject,
+            "body": {"content": body}
+        }
+        
+        response = await self._make_request("POST", endpoint, json=message_data)
+        return response
+    
+    async def get_user_info(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get user information
+        
+        Args:
+            user_id: Optional user ID (if not provided, returns current user info)
+            
+        Returns:
+            User information
+        """
+        if user_id:
+            endpoint = f"/g/api/v1/users/{user_id}"
+        else:
+            endpoint = "/g/api/v1/users/me"
+            
+        response = await self._make_request("GET", endpoint)
+        return response
+    
+    async def get_applications(self) -> List[Dict[str, Any]]:
+        """
+        Get available applications
+        
+        Returns:
+            List of available applications
+        """
+        endpoint = "/g/api/v1/base/applications"
+        response = await self._make_request("GET", endpoint)
+        applications: List[Dict[str, Any]] = response.get("applications", [])
+        return applications
+    
+    async def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Search users
+
+        Args:
+            query: Search query
+            limit: Maximum number of results
+
+        Returns:
+            List of matching users
+        """
+        # Garoon REST APIのユーザー一覧取得エンドポイント
+        # 参考: https://cybozu.dev/ja/garoon/docs/rest-api/
+        endpoint = "/g/api/v1/base/users"
+        params: Dict[str, str] = {
+            "name": query,
+            "limit": str(limit)
+        }
+
+        try:
+            response = await self._make_request("GET", endpoint, params=params)
+            users: List[Dict[str, Any]] = response.get("users", [])
+            return users
+        except GaroonAPIError as e:
+            # エンドポイントが見つからない場合、空のリストを返す
+            if "GRN_REST_API_00101" in str(e):
+                logger.warning(f"User search endpoint not available: {e}")
+                return []
+            raise

@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from urllib.parse import urljoin
 
@@ -270,3 +270,158 @@ class GaroonClient:
                 logger.warning(f"User search endpoint not available: {e}")
                 return []
             raise
+
+    async def find_available_time(
+        self,
+        user_id: str,
+        start_date: str,
+        end_date: str,
+        duration_minutes: int,
+        start_time: str = "09:00",
+        end_time: str = "18:00",
+        exclude_lunch: bool = True
+    ) -> List[Dict[str, str]]:
+        """
+        Find available time slots for a meeting between the authenticated user and another user
+
+        Args:
+            user_id: Other user's Garoon user ID
+            start_date: Search start date (YYYY-MM-DD)
+            end_date: Search end date (YYYY-MM-DD)
+            duration_minutes: Required meeting duration in minutes
+            start_time: Daily start time (HH:MM, default: 09:00)
+            end_time: Daily end time (HH:MM, default: 18:00)
+            exclude_lunch: Exclude lunch time 12:00-13:00 (default: True)
+
+        Returns:
+            List of available time slots (max 3), each containing:
+            - start: Start datetime (ISO format)
+            - end: End datetime (ISO format)
+        """
+        # Get both users' schedules
+        my_schedule = await self.get_schedule(start_date, end_date)
+        other_schedule = await self.get_schedule(start_date, end_date, user_id)
+
+        # Merge schedules
+        all_events = my_schedule + other_schedule
+
+        # Parse business hours
+        start_hour, start_minute = map(int, start_time.split(":"))
+        end_hour, end_minute = map(int, end_time.split(":"))
+
+        available_slots: List[Dict[str, str]] = []
+        current_date = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+
+        while current_date <= end_date_obj and len(available_slots) < 3:
+            # Set business hours for this day
+            day_start = current_date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+            day_end = current_date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+            # Get events for this day
+            day_events = []
+            for event in all_events:
+                event_start_str = event.get("start", {}).get("dateTime", "")
+                event_end_str = event.get("end", {}).get("dateTime", "")
+
+                if not event_start_str or not event_end_str:
+                    continue
+
+                # Parse event times (handle various datetime formats)
+                try:
+                    # Remove timezone info for comparison
+                    event_start = datetime.fromisoformat(event_start_str.replace("Z", "+00:00"))
+                    event_end = datetime.fromisoformat(event_end_str.replace("Z", "+00:00"))
+
+                    # Convert to naive datetime (remove timezone)
+                    event_start = event_start.replace(tzinfo=None)
+                    event_end = event_end.replace(tzinfo=None)
+
+                    # Check if event is on this day
+                    if event_start.date() == current_date.date() or event_end.date() == current_date.date():
+                        day_events.append((event_start, event_end))
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse event datetime: {e}")
+                    continue
+
+            # Add lunch time if excluded
+            if exclude_lunch:
+                lunch_start = current_date.replace(hour=12, minute=0, second=0, microsecond=0)
+                lunch_end = current_date.replace(hour=13, minute=0, second=0, microsecond=0)
+                day_events.append((lunch_start, lunch_end))
+
+            # Sort events by start time
+            day_events.sort(key=lambda x: x[0])
+
+            # Find gaps
+            current_time = day_start
+            for event_start, event_end in day_events:
+                # Check if there's a gap before this event
+                if event_start > current_time:
+                    gap_duration = (event_start - current_time).total_seconds() / 60
+                    if gap_duration >= duration_minutes:
+                        # Found an available slot
+                        slot_end = current_time + timedelta(minutes=duration_minutes)
+                        available_slots.append({
+                            "start": current_time.isoformat(),
+                            "end": slot_end.isoformat()
+                        })
+                        if len(available_slots) >= 3:
+                            break
+
+                # Move current_time forward
+                current_time = max(current_time, event_end)
+
+            # Check if there's time left at the end of the day
+            if len(available_slots) < 3 and current_time < day_end:
+                gap_duration = (day_end - current_time).total_seconds() / 60
+                if gap_duration >= duration_minutes:
+                    slot_end = current_time + timedelta(minutes=duration_minutes)
+                    available_slots.append({
+                        "start": current_time.isoformat(),
+                        "end": slot_end.isoformat()
+                    })
+
+            # Move to next day
+            current_date += timedelta(days=1)
+
+        return available_slots
+
+    async def create_meeting(
+        self,
+        subject: str,
+        start_datetime: str,
+        end_datetime: str,
+        attendee_ids: List[str],
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a meeting with attendees
+
+        Args:
+            subject: Meeting subject/title
+            start_datetime: Start datetime in ISO format
+            end_datetime: End datetime in ISO format
+            attendee_ids: List of attendee user IDs
+            description: Optional meeting description
+
+        Returns:
+            Created meeting information
+        """
+        endpoint = "/g/api/v1/schedule/events"
+
+        # Build attendees list
+        attendees = [{"type": "USER", "id": user_id} for user_id in attendee_ids]
+
+        event_data: Dict[str, Any] = {
+            "subject": {"value": subject},
+            "start": {"dateTime": start_datetime},
+            "end": {"dateTime": end_datetime},
+            "attendees": attendees
+        }
+
+        if description:
+            event_data["notes"] = {"value": description}
+
+        response = await self._make_request("POST", endpoint, json=event_data)
+        return response

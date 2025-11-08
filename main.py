@@ -165,6 +165,78 @@ class GaroonMCPServer:
                         },
                         "required": ["query"]
                     }
+                ),
+                Tool(
+                    name="find_available_time",
+                    description="Find available time slots for a meeting with another user",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "user_id": {
+                                "type": "string",
+                                "description": "Other user's Garoon user ID"
+                            },
+                            "start_date": {
+                                "type": "string",
+                                "description": "Search start date (YYYY-MM-DD format)"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "description": "Search end date (YYYY-MM-DD format)"
+                            },
+                            "duration_minutes": {
+                                "type": "integer",
+                                "description": "Required meeting duration in minutes"
+                            },
+                            "start_time": {
+                                "type": "string",
+                                "description": "Daily start time (HH:MM format, default: 09:00)",
+                                "default": "09:00"
+                            },
+                            "end_time": {
+                                "type": "string",
+                                "description": "Daily end time (HH:MM format, default: 18:00)",
+                                "default": "18:00"
+                            },
+                            "exclude_lunch": {
+                                "type": "boolean",
+                                "description": "Exclude lunch time 12:00-13:00 (default: true)",
+                                "default": True
+                            }
+                        },
+                        "required": ["user_id", "start_date", "end_date", "duration_minutes"]
+                    }
+                ),
+                Tool(
+                    name="create_meeting",
+                    description="Create a meeting with attendees",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "subject": {
+                                "type": "string",
+                                "description": "Meeting subject/title"
+                            },
+                            "start_datetime": {
+                                "type": "string",
+                                "description": "Start datetime (ISO format)"
+                            },
+                            "end_datetime": {
+                                "type": "string",
+                                "description": "End datetime (ISO format)"
+                            },
+                            "attendee_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of attendee user IDs"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Meeting description (optional)"
+                            }
+                        },
+                        "required": ["subject", "start_datetime", "end_datetime", "attendee_ids"]
+                    }
                 )
             ]
 
@@ -213,6 +285,28 @@ class GaroonMCPServer:
                         limit=arguments.get("limit", 20)
                     )
                     return [TextContent(type="text", text=str(result))]
+
+                elif name == "find_available_time":
+                    result = await self.garoon_client.find_available_time(
+                        user_id=arguments["user_id"],
+                        start_date=arguments["start_date"],
+                        end_date=arguments["end_date"],
+                        duration_minutes=arguments["duration_minutes"],
+                        start_time=arguments.get("start_time", "09:00"),
+                        end_time=arguments.get("end_time", "18:00"),
+                        exclude_lunch=arguments.get("exclude_lunch", True)
+                    )
+                    return [TextContent(type="text", text=str(result))]
+
+                elif name == "create_meeting":
+                    meeting_result = await self.garoon_client.create_meeting(
+                        subject=arguments["subject"],
+                        start_datetime=arguments["start_datetime"],
+                        end_datetime=arguments["end_datetime"],
+                        attendee_ids=arguments["attendee_ids"],
+                        description=arguments.get("description")
+                    )
+                    return [TextContent(type="text", text=f"Meeting created: {meeting_result}")]
 
                 else:
                     raise Exception(f"Unknown tool: {name}")

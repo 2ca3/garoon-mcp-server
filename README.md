@@ -9,6 +9,10 @@ A Model Context Protocol (MCP) server that provides integration with Garoon (Cyb
 - **スケジュール管理 / Schedule Management**:
   - 自分のスケジュールの閲覧・作成
   - 他のユーザーのスケジュール閲覧（targetTypeパラメータ対応）
+- **会議スケジューラー / Meeting Scheduler** 🆕:
+  - 空き時間の自動検索（自分と相手の両方が空いている時間を検出）
+  - 参加者付きで会議を自動設定
+  - 営業時間・昼休みの考慮
 - **ユーザー検索 / User Search**:
   - 名前やメールアドレスでユーザーを検索
   - 他ユーザーのスケジュール確認に必要なユーザーIDの取得
@@ -146,6 +150,15 @@ Claude Desktopで以下のようにGaroon機能を使用できます:
 「田中」という名前のユーザーを探して
 ```
 
+**会議の空き時間検索と設定:** 🆕
+```
+山田さんと明日の午後、1時間会議したい。空いている時間は？
+```
+
+```
+14:00-15:00で「プロジェクト会議」という会議を設定してください
+```
+
 ## Dockerを使った設定（オプション） / Using Docker (Optional)
 
 Dockerを使ってMCPサーバを実行することもできます。
@@ -242,6 +255,32 @@ Parameters:
 
 **使用例**: 他のユーザーのスケジュールを確認する前に、このツールでユーザーIDを検索できます。
 
+#### find_available_time 🆕
+自分と指定ユーザーの両方が空いている時間帯を検索します / Find available time slots for a meeting with another user.
+
+Parameters:
+- `user_id` (required): 相手のユーザーID / Other user's Garoon user ID
+- `start_date` (required): 検索開始日 (YYYY-MM-DD) / Search start date
+- `end_date` (required): 検索終了日 (YYYY-MM-DD) / Search end date
+- `duration_minutes` (required): 必要な会議時間（分） / Required meeting duration in minutes
+- `start_time` (optional): 営業開始時刻 (HH:MM, デフォルト: 09:00) / Daily start time
+- `end_time` (optional): 営業終了時刻 (HH:MM, デフォルト: 18:00) / Daily end time
+- `exclude_lunch` (optional): 昼休み除外 (デフォルト: true) / Exclude lunch time 12:00-13:00
+
+**戻り値**: 最大3件の空き時間候補（開始・終了時刻）
+
+#### create_meeting 🆕
+参加者付きで会議スケジュールを作成します / Create a meeting with attendees.
+
+Parameters:
+- `subject` (required): 会議のタイトル / Meeting subject/title
+- `start_datetime` (required): 開始日時 (ISO形式) / Start datetime (ISO format)
+- `end_datetime` (required): 終了日時 (ISO形式) / End datetime (ISO format)
+- `attendee_ids` (required): 参加者のユーザーIDリスト / List of attendee user IDs
+- `description` (optional): 会議の説明 / Meeting description
+
+**注意**: 参加者は自動的に会議に追加されます。
+
 ## トラブルシューティング / Troubleshooting
 
 ### 認証エラーが発生する場合 / Authentication errors
@@ -282,6 +321,7 @@ garoon-mcp-server/
 ├── garoon_client.py         # Garoon APIクライアント
 ├── test_auth.py             # 認証テストスクリプト
 ├── test_user_schedule.py    # ユーザー検索とスケジュール取得のテスト
+├── test_meeting_scheduler.py # 会議スケジューラーのテスト 🆕
 ├── pyproject.toml           # プロジェクト設定と依存関係
 ├── uv.lock                  # 依存関係のロックファイル
 ├── Dockerfile               # Dockerイメージ設定
@@ -326,6 +366,23 @@ uv run pytest
 ```
 
 ## 変更履歴 / Changelog
+
+### v0.2.0 (会議スケジューラー機能追加) 🆕
+
+**追加された機能:**
+- ✅ 空き時間自動検索機能（`find_available_time`ツール）
+  - 自分と相手の両方が空いている時間を自動検出
+  - 営業時間・昼休みの考慮
+  - 最大3件の候補を提示
+- ✅ 参加者付き会議作成（`create_meeting`ツール）
+  - 複数の参加者を指定可能
+  - 自動的に参加者を会議に追加
+- ✅ 包括的なユニットテスト（test_meeting_scheduler.py）
+
+**技術的な改善:**
+- Garoon REST APIの参加者設定機能の実装
+- 空き時間計算アルゴリズムの実装
+- タイムゾーン処理の対応
 
 ### v0.1.0 (初回リリース)
 

@@ -167,50 +167,6 @@ class GaroonClient:
         response = await self._make_request("POST", endpoint, json=event_data)
         return response
     
-    async def get_messages(self, folder: str = "inbox", limit: int = 20) -> List[Dict[str, Any]]:
-        """
-        Get messages from specified folder
-        
-        Args:
-            folder: Folder name (inbox, sent, etc.)
-            limit: Maximum number of messages to retrieve
-            
-        Returns:
-            List of messages
-        """
-        endpoint = "/g/api/v1/mail/messages"
-        params = {
-            "folder": folder,
-            "limit": limit
-        }
-
-        response = await self._make_request("GET", endpoint, params=params)
-        messages: List[Dict[str, Any]] = response.get("messages", [])
-        return messages
-    
-    async def send_message(self, to: List[str], subject: str, body: str) -> Dict[str, Any]:
-        """
-        Send a message
-        
-        Args:
-            to: List of recipient user IDs or email addresses
-            subject: Message subject
-            body: Message body
-            
-        Returns:
-            Sent message information
-        """
-        endpoint = "/g/api/v1/mail/messages"
-        
-        message_data = {
-            "to": [{"name": recipient, "emailAddress": recipient} for recipient in to],
-            "subject": subject,
-            "body": {"content": body}
-        }
-        
-        response = await self._make_request("POST", endpoint, json=message_data)
-        return response
-    
     async def get_user_info(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Get user information

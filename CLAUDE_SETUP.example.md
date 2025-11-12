@@ -75,24 +75,31 @@ nano ~/Library/Application\ Support/Claude/claude_desktop_config.json
   - end_date: 終了日 (YYYY-MM-DD)
   - user_id: ユーザーID (オプション、指定すると他ユーザーのスケジュールを取得)
 
-- **search_users**: ユーザー検索
-  - query: 検索クエリ（名前、メールアドレス等）
-  - limit: 取得件数 (デフォルト: 20)
-
 - **create_schedule**: スケジュール作成
   - subject: 件名
   - start_datetime: 開始日時 (ISO形式)
   - end_datetime: 終了日時 (ISO形式)
   - description: 説明 (オプション)
 
-- **get_messages**: メッセージ取得
-  - folder: フォルダ名 (inbox, sent等)
+- **search_users**: ユーザー検索
+  - query: 検索クエリ（名前、メールアドレス等）
   - limit: 取得件数 (デフォルト: 20)
 
-- **send_message**: メッセージ送信
-  - to: 宛先ユーザーIDのリスト
+- **find_available_time**: 他者との空き時間枠検索
+  - user_id: 他ユーザーのGaroonユーザーID
+  - start_date: 検索開始日 (YYYY-MM-DD)
+  - end_date: 検索終了日 (YYYY-MM-DD)
+  - duration_minutes: 必要なミーティング時間（分）
+  - start_time: 日次開始時刻 (HH:MM形式、デフォルト: 09:00) (オプション)
+  - end_time: 日次終了時刻 (HH:MM形式、デフォルト: 18:00) (オプション)
+  - exclude_lunch: ランチタイム12:00-13:00を除外 (デフォルト: true) (オプション)
+
+- **create_meeting**: 参加者を指定してミーティング作成
   - subject: 件名
-  - body: 本文
+  - start_datetime: 開始日時 (ISO形式)
+  - end_datetime: 終了日時 (ISO形式)
+  - attendee_ids: 参加者ユーザーIDのリスト
+  - description: 説明 (オプション)
 
 ## 6. 使用例
 
@@ -108,6 +115,14 @@ nano ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
 ```
 中田さんの明日のスケジュールを確認してください
+```
+
+```
+中田さんと来週、1時間の打ち合わせをしたいので空いている時間を探してください
+```
+
+```
+明日の15:00-16:00に中田さんと佐藤さんを招待してプロジェクト会議を設定してください
 ```
 
 ## 注意事項

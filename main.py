@@ -106,48 +106,6 @@ class GaroonMCPServer:
                     }
                 ),
                 Tool(
-                    name="get_messages",
-                    description="Get messages from Garoon",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "folder": {
-                                "type": "string",
-                                "description": "Message folder (inbox, sent, etc.)"
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Maximum number of messages to retrieve",
-                                "default": 20
-                            }
-                        },
-                        "required": ["folder"]
-                    }
-                ),
-                Tool(
-                    name="send_message",
-                    description="Send a message through Garoon",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "to": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of recipient user IDs"
-                            },
-                            "subject": {
-                                "type": "string",
-                                "description": "Message subject"
-                            },
-                            "body": {
-                                "type": "string",
-                                "description": "Message body"
-                            }
-                        },
-                        "required": ["to", "subject", "body"]
-                    }
-                ),
-                Tool(
                     name="search_users",
                     description="Search for users in Garoon by name or other criteria",
                     inputSchema={
@@ -263,21 +221,6 @@ class GaroonMCPServer:
                         description=arguments.get("description")
                     )
                     return [TextContent(type="text", text=f"Schedule created: {schedule_result}")]
-
-                elif name == "get_messages":
-                    result = await self.garoon_client.get_messages(
-                        folder=arguments["folder"],
-                        limit=arguments.get("limit", 20)
-                    )
-                    return [TextContent(type="text", text=str(result))]
-
-                elif name == "send_message":
-                    message_result = await self.garoon_client.send_message(
-                        to=arguments["to"],
-                        subject=arguments["subject"],
-                        body=arguments["body"]
-                    )
-                    return [TextContent(type="text", text=f"Message sent: {message_result}")]
 
                 elif name == "search_users":
                     result = await self.garoon_client.search_users(

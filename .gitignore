@@ -77,3 +77,6 @@ CLAUDE_SETUP.md
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Claude Code slash commands
+.claude/commands/*

@@ -11,6 +11,7 @@ import base64
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class GaroonAPIError(Exception):
 class GaroonClient:
     """Garoon REST API client using X-Cybozu-Authorization header"""
 
-    def __init__(self, base_url: str, g_username: str, g_password: str):
+    def __init__(self, base_url: str, g_username: str, g_password: str, timezone: str = "UTC"):
         """
         Initialize Garoon client
 
@@ -29,10 +30,20 @@ class GaroonClient:
             base_url: Garoon base URL (e.g., https://your-garoon.cybozu.com)
             g_username: Garoon API username
             g_password: Garoon API password
+            timezone: Timezone name (e.g., 'Asia/Tokyo', 'UTC')
+
+        Raises:
+            ValueError: If invalid timezone is provided
         """
         self.base_url = base_url.rstrip('/')
         self.g_username = g_username
         self.g_password = g_password
+
+        try:
+            self.timezone = ZoneInfo(timezone)
+        except Exception as e:
+            raise ValueError(f"Invalid timezone '{timezone}': {e}") from e
+
         self.session: Optional[aiohttp.ClientSession] = None
         self.authenticated = False
 
@@ -122,11 +133,26 @@ class GaroonClient:
 
         Returns:
             List of schedule events
+
+        Raises:
+            ValueError: If date format is invalid
         """
         endpoint = "/g/api/v1/schedule/events"
+
+        # Convert date strings to timezone-aware datetime objects
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(
+                hour=0, minute=0, second=0, microsecond=0, tzinfo=self.timezone
+            )
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, microsecond=0, tzinfo=self.timezone
+            )
+        except ValueError as e:
+            raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got start_date='{start_date}', end_date='{end_date}': {e}") from e
+
         params: Dict[str, str] = {
-            "rangeStart": f"{start_date}T00:00:00Z",
-            "rangeEnd": f"{end_date}T23:59:59Z"
+            "rangeStart": start_dt.isoformat(),
+            "rangeEnd": end_dt.isoformat()
         }
 
         # targetパラメータを指定する場合、targetTypeも必須
@@ -266,13 +292,13 @@ class GaroonClient:
         end_hour, end_minute = map(int, end_time.split(":"))
 
         available_slots: List[Dict[str, str]] = []
-        current_date = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        current_date = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=self.timezone)
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=self.timezone)
 
         while current_date <= end_date_obj and len(available_slots) < 3:
-            # Set business hours for this day
-            day_start = current_date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-            day_end = current_date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+            # Set business hours for this day (use naive datetime for comparison)
+            day_start = current_date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0, tzinfo=None)
+            day_end = current_date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0, tzinfo=None)
 
             # Get events for this day
             day_events = []
@@ -302,8 +328,9 @@ class GaroonClient:
 
             # Add lunch time if excluded
             if exclude_lunch:
-                lunch_start = current_date.replace(hour=12, minute=0, second=0, microsecond=0)
-                lunch_end = current_date.replace(hour=13, minute=0, second=0, microsecond=0)
+                # Create naive datetime for consistency with event_start/event_end
+                lunch_start = current_date.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=None)
+                lunch_end = current_date.replace(hour=13, minute=0, second=0, microsecond=0, tzinfo=None)
                 day_events.append((lunch_start, lunch_end))
 
             # Sort events by start time

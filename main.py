@@ -30,12 +30,12 @@ class GaroonMCPServer:
         self.server = Server("garoon-mcp")
         self.garoon_client: Optional[GaroonClient] = None
 
-    async def initialize(self, base_url: str, g_username: str, g_password: str) -> None:
+    async def initialize(self, base_url: str, g_username: str, g_password: str, timezone: str = "UTC") -> None:
         """Initialize Garoon client connection using X-Cybozu-Authorization header"""
         try:
-            self.garoon_client = GaroonClient(base_url, g_username, g_password)
+            self.garoon_client = GaroonClient(base_url, g_username, g_password, timezone)
             await self.garoon_client.authenticate()
-            logger.info("Garoon client initialized successfully with X-Cybozu-Authorization header")
+            logger.info(f"Garoon client initialized successfully with X-Cybozu-Authorization header (timezone: {timezone})")
         except Exception as e:
             logger.error(f"Failed to initialize Garoon client: {e}")
             raise
@@ -270,6 +270,7 @@ async def main() -> None:
     base_url = os.getenv("GAROON_BASE_URL")
     g_username = os.getenv("GAROON_USERNAME")
     g_password = os.getenv("GAROON_PASSWORD")
+    timezone = os.getenv("GAROON_TIMEZONE", "UTC")
 
     if not all([base_url, g_username, g_password]):
         logger.error("Missing required environment variables:")
@@ -286,7 +287,7 @@ async def main() -> None:
     mcp_server.setup_handlers()
 
     # Initialize Garoon client with Garoon credentials
-    await mcp_server.initialize(base_url, g_username, g_password)
+    await mcp_server.initialize(base_url, g_username, g_password, timezone)
     
     try:
         # Run server with proper initialization options

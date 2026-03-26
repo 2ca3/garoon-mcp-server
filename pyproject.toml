@@ -34,8 +34,7 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
+    "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
 
@@ -46,12 +45,74 @@ garoon-mcp-server = "main:main"
 where = ["."]
 include = ["*"]
 
-[tool.black]
-line-length = 88
-target-version = ['py311']
+[tool.ruff]
+# CLAUDE.mdのコーディング規約に従った設定
+line-length = 120
+target-version = "py311"
+
+# 除外ディレクトリ
+extend-exclude = [
+    "db_schema/",  # Submodule
+]
+
+[tool.ruff.lint]
+# 有効にするルール
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+# 無効にするルール
+ignore = [
+    "E501",  # line-length (ruff formatで自動調整)
+]
+
+# ファイル別ルール
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",  # assert文許可
+    "PLR2004",  # マジック値許可
+    "D",  # docstring省略可
+    "N999",  # 日本語関数名許可
+    "S105",  # パスワード直書き許可
+    "S106",  # パスワード直書き許可
+]
+"scripts/*" = [
+    "T201",  # print文許可
+]
+
+[tool.ruff.format]
+# フォーマット設定
+quote-style = "double"  # ダブルクォート
+indent-style = "space"
+line-ending = "lf"  # Unix改行コード
+
+[tool.ruff.lint.pydocstyle]
+# NumPyスタイルのdocstring
+convention = "numpy"
 
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]

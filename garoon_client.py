@@ -3,21 +3,23 @@
 A Python client for interacting with Garoon REST API using X-Cybozu-Authorization header.
 """
 
-import aiohttp
-import asyncio
-import json
-import logging
 import base64
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Any
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
+import aiohttp
+
 logger = logging.getLogger(__name__)
+
 
 class GaroonAPIError(Exception):
     """Custom exception for Garoon API errors"""
+
     pass
+
 
 class GaroonClient:
     """Garoon REST API client using X-Cybozu-Authorization header"""
@@ -35,7 +37,7 @@ class GaroonClient:
         Raises:
             ValueError: If invalid timezone is provided
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.g_username = g_username
         self.g_password = g_password
 
@@ -44,14 +46,14 @@ class GaroonClient:
         except Exception as e:
             raise ValueError(f"Invalid timezone '{timezone}': {e}") from e
 
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.authenticated = False
 
         # Create Garoon token like GAS example: base64Encode(username + ':' + password)
         g_credentials = f"{g_username}:{g_password}"
-        self.garoon_token = base64.b64encode(g_credentials.encode('utf-8')).decode('utf-8')
+        self.garoon_token = base64.b64encode(g_credentials.encode("utf-8")).decode("utf-8")
 
-    async def __aenter__(self) -> 'GaroonClient':
+    async def __aenter__(self) -> "GaroonClient":
         """Async context manager entry"""
         await self.authenticate()
         return self
@@ -65,23 +67,20 @@ class GaroonClient:
         if self.session is None:
             # Try different header formats commonly used by Cybozu products
             headers = {
-                'X-Cybozu-Authorization': self.garoon_token,
-                'Content-Type': 'application/json',
-                'User-Agent': 'GaroonMCPServer/1.0'
+                "X-Cybozu-Authorization": self.garoon_token,
+                "Content-Type": "application/json",
+                "User-Agent": "GaroonMCPServer/1.0",
             }
             self.session = aiohttp.ClientSession(headers=headers)
-        
+
         try:
             # Test with schedule API (commonly available endpoint)
             url = urljoin(self.base_url, "/g/api/v1/schedule/events")
-            params: Dict[str, str] = {
-                'limit': '1',
-                'fields': 'id,subject'
-            }
+            params: dict[str, str] = {"limit": "1", "fields": "id,subject"}
             async with self.session.get(url, params=params) as response:
                 response_text = await response.text()
                 logger.info(f"Auth test response: {response.status}, content: {response_text[:200]}")
-                
+
                 if response.status == 200:
                     self.authenticated = True
                     logger.info("Successfully authenticated with Garoon using X-Cybozu-Authorization header")
@@ -90,8 +89,7 @@ class GaroonClient:
         except Exception as e:
             logger.error(f"Authentication error: {e}")
             await self.close()  # Ensure session is closed on error
-            raise GaroonAPIError(f"Authentication failed: {e}")
-    
+            raise GaroonAPIError(f"Authentication failed: {e}") from e
 
     async def close(self) -> None:
         """Close the HTTP session"""
@@ -100,7 +98,7 @@ class GaroonClient:
             self.session = None
             self.authenticated = False
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Dict[str, Any]:
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> dict[str, Any]:
         """Make HTTP request to Garoon API"""
         if not self.authenticated:
             await self.authenticate()
@@ -113,16 +111,16 @@ class GaroonClient:
         try:
             async with self.session.request(method, url, **kwargs) as response:
                 if response.status == 200:
-                    result: Dict[str, Any] = await response.json()
+                    result: dict[str, Any] = await response.json()
                     return result
                 else:
                     error_text = await response.text()
                     raise GaroonAPIError(f"API request failed: {response.status} - {error_text}")
         except aiohttp.ClientError as e:
             logger.error(f"HTTP request error: {e}")
-            raise GaroonAPIError(f"Request failed: {e}")
-    
-    async def get_schedule(self, start_date: str, end_date: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+            raise GaroonAPIError(f"Request failed: {e}") from e
+
+    async def get_schedule(self, start_date: str, end_date: str, user_id: str | None = None) -> list[dict[str, Any]]:
         """
         Get schedule events
 
@@ -148,12 +146,11 @@ class GaroonClient:
                 hour=23, minute=59, second=59, microsecond=0, tzinfo=self.timezone
             )
         except ValueError as e:
-            raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got start_date='{start_date}', end_date='{end_date}': {e}") from e
+            raise ValueError(
+                f"Invalid date format. Expected YYYY-MM-DD, got start_date='{start_date}', end_date='{end_date}': {e}"
+            ) from e
 
-        params: Dict[str, str] = {
-            "rangeStart": start_dt.isoformat(),
-            "rangeEnd": end_dt.isoformat()
-        }
+        params: dict[str, str] = {"rangeStart": start_dt.isoformat(), "rangeEnd": end_dt.isoformat()}
 
         # targetパラメータを指定する場合、targetTypeも必須
         # 参考: https://cybozu.dev/ja/garoon/docs/rest-api/schedule/get-schedule-events/
@@ -162,68 +159,66 @@ class GaroonClient:
             params["targetType"] = "user"
 
         response = await self._make_request("GET", endpoint, params=params)
-        events: List[Dict[str, Any]] = response.get("events", [])
+        events: list[dict[str, Any]] = response.get("events", [])
         return events
-    
-    async def create_schedule(self, subject: str, start_datetime: str, end_datetime: str, 
-                            description: Optional[str] = None) -> Dict[str, Any]:
+
+    async def create_schedule(
+        self, subject: str, start_datetime: str, end_datetime: str, description: str | None = None
+    ) -> dict[str, Any]:
         """
         Create a new schedule event
-        
+
         Args:
             subject: Event subject/title
             start_datetime: Start datetime in ISO format
             end_datetime: End datetime in ISO format
             description: Optional event description
-            
+
         Returns:
             Created event information
         """
         endpoint = "/g/api/v1/schedule/events"
-        
+
         event_data = {
             "subject": {"value": subject},
             "start": {"dateTime": start_datetime},
-            "end": {"dateTime": end_datetime}
+            "end": {"dateTime": end_datetime},
         }
-        
+
         if description:
             event_data["notes"] = {"value": description}
-            
+
         response = await self._make_request("POST", endpoint, json=event_data)
         return response
-    
-    async def get_user_info(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+
+    async def get_user_info(self, user_id: str | None = None) -> dict[str, Any]:
         """
         Get user information
-        
+
         Args:
             user_id: Optional user ID (if not provided, returns current user info)
-            
+
         Returns:
             User information
         """
-        if user_id:
-            endpoint = f"/g/api/v1/users/{user_id}"
-        else:
-            endpoint = "/g/api/v1/users/me"
-            
+        endpoint = f"/g/api/v1/users/{user_id}" if user_id else "/g/api/v1/users/me"
+
         response = await self._make_request("GET", endpoint)
         return response
-    
-    async def get_applications(self) -> List[Dict[str, Any]]:
+
+    async def get_applications(self) -> list[dict[str, Any]]:
         """
         Get available applications
-        
+
         Returns:
             List of available applications
         """
         endpoint = "/g/api/v1/base/applications"
         response = await self._make_request("GET", endpoint)
-        applications: List[Dict[str, Any]] = response.get("applications", [])
+        applications: list[dict[str, Any]] = response.get("applications", [])
         return applications
-    
-    async def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+
+    async def search_users(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """
         Search users
 
@@ -237,14 +232,11 @@ class GaroonClient:
         # Garoon REST APIのユーザー一覧取得エンドポイント
         # 参考: https://cybozu.dev/ja/garoon/docs/rest-api/
         endpoint = "/g/api/v1/base/users"
-        params: Dict[str, str] = {
-            "name": query,
-            "limit": str(limit)
-        }
+        params: dict[str, str] = {"name": query, "limit": str(limit)}
 
         try:
             response = await self._make_request("GET", endpoint, params=params)
-            users: List[Dict[str, Any]] = response.get("users", [])
+            users: list[dict[str, Any]] = response.get("users", [])
             return users
         except GaroonAPIError as e:
             # エンドポイントが見つからない場合、空のリストを返す
@@ -261,8 +253,8 @@ class GaroonClient:
         duration_minutes: int,
         start_time: str = "09:00",
         end_time: str = "18:00",
-        exclude_lunch: bool = True
-    ) -> List[Dict[str, str]]:
+        exclude_lunch: bool = True,
+    ) -> list[dict[str, str]]:
         """
         Find available time slots for a meeting between the authenticated user and another user
 
@@ -291,7 +283,7 @@ class GaroonClient:
         start_hour, start_minute = map(int, start_time.split(":"))
         end_hour, end_minute = map(int, end_time.split(":"))
 
-        available_slots: List[Dict[str, str]] = []
+        available_slots: list[dict[str, str]] = []
         current_date = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=self.timezone)
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=self.timezone)
 
@@ -345,10 +337,7 @@ class GaroonClient:
                     if gap_duration >= duration_minutes:
                         # Found an available slot
                         slot_end = current_time + timedelta(minutes=duration_minutes)
-                        available_slots.append({
-                            "start": current_time.isoformat(),
-                            "end": slot_end.isoformat()
-                        })
+                        available_slots.append({"start": current_time.isoformat(), "end": slot_end.isoformat()})
                         if len(available_slots) >= 3:
                             break
 
@@ -360,10 +349,7 @@ class GaroonClient:
                 gap_duration = (day_end - current_time).total_seconds() / 60
                 if gap_duration >= duration_minutes:
                     slot_end = current_time + timedelta(minutes=duration_minutes)
-                    available_slots.append({
-                        "start": current_time.isoformat(),
-                        "end": slot_end.isoformat()
-                    })
+                    available_slots.append({"start": current_time.isoformat(), "end": slot_end.isoformat()})
 
             # Move to next day
             current_date += timedelta(days=1)
@@ -375,9 +361,9 @@ class GaroonClient:
         subject: str,
         start_datetime: str,
         end_datetime: str,
-        attendee_ids: List[str],
-        description: Optional[str] = None
-    ) -> Dict[str, Any]:
+        attendee_ids: list[str],
+        description: str | None = None,
+    ) -> dict[str, Any]:
         """
         Create a meeting with attendees
 
@@ -396,11 +382,11 @@ class GaroonClient:
         # Build attendees list
         attendees = [{"type": "USER", "id": user_id} for user_id in attendee_ids]
 
-        event_data: Dict[str, Any] = {
+        event_data: dict[str, Any] = {
             "subject": {"value": subject},
             "start": {"dateTime": start_datetime},
             "end": {"dateTime": end_datetime},
-            "attendees": attendees
+            "attendees": attendees,
         }
 
         if description:

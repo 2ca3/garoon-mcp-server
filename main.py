@@ -7,35 +7,42 @@ Uses X-Cybozu-Authorization header with Base64 encoded credentials.
 
 import asyncio
 import logging
+import os
 import sys
-from typing import Optional, Dict, Any, List
+from typing import Any
+
+from dotenv import load_dotenv
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    Tool,
     TextContent,
+    Tool,
 )
+
 from garoon_client import GaroonClient
 
 # Configure logging to use stderr to avoid interfering with MCP JSON-RPC on stdout
-logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(name)s: %(message)s')
+logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Also configure garoon_client logger to use stderr
 garoon_logger = logging.getLogger("garoon_client")
 garoon_logger.setLevel(logging.INFO)
 
+
 class GaroonMCPServer:
     def __init__(self) -> None:
         self.server = Server("garoon-mcp")
-        self.garoon_client: Optional[GaroonClient] = None
+        self.garoon_client: GaroonClient | None = None
 
     async def initialize(self, base_url: str, g_username: str, g_password: str, timezone: str = "UTC") -> None:
         """Initialize Garoon client connection using X-Cybozu-Authorization header"""
         try:
             self.garoon_client = GaroonClient(base_url, g_username, g_password, timezone)
             await self.garoon_client.authenticate()
-            logger.info(f"Garoon client initialized successfully with X-Cybozu-Authorization header (timezone: {timezone})")
+            logger.info(
+                f"Garoon client initialized successfully with X-Cybozu-Authorization header (timezone: {timezone})"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Garoon client: {e}")
             raise
@@ -44,17 +51,17 @@ class GaroonMCPServer:
         """Setup MCP tool handlers"""
 
         @self.server.list_resources()
-        async def list_resources() -> List[Any]:
+        async def list_resources() -> list[Any]:
             """List available resources"""
             return []
 
         @self.server.list_prompts()
-        async def list_prompts() -> List[Any]:
+        async def list_prompts() -> list[Any]:
             """List available prompts"""
             return []
-        
+
         @self.server.list_tools()
-        async def list_tools() -> List[Tool]:
+        async def list_tools() -> list[Tool]:
             """List available Garoon tools"""
             return [
                 Tool(
@@ -63,21 +70,15 @@ class GaroonMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "start_date": {
-                                "type": "string",
-                                "description": "Start date (YYYY-MM-DD format)"
-                            },
-                            "end_date": {
-                                "type": "string",
-                                "description": "End date (YYYY-MM-DD format)"
-                            },
+                            "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD format)"},
+                            "end_date": {"type": "string", "description": "End date (YYYY-MM-DD format)"},
                             "user_id": {
                                 "type": "string",
-                                "description": "User ID to get schedule for. If not specified, returns your own schedule. Use search_users tool to find user IDs."
-                            }
+                                "description": "User ID to get schedule for. If not specified, returns your own schedule. Use search_users tool to find user IDs.",
+                            },
                         },
-                        "required": ["start_date", "end_date"]
-                    }
+                        "required": ["start_date", "end_date"],
+                    },
                 ),
                 Tool(
                     name="create_schedule",
@@ -85,25 +86,13 @@ class GaroonMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "subject": {
-                                "type": "string",
-                                "description": "Event subject/title"
-                            },
-                            "start_datetime": {
-                                "type": "string",
-                                "description": "Start datetime (ISO format)"
-                            },
-                            "end_datetime": {
-                                "type": "string",
-                                "description": "End datetime (ISO format)"
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": "Event description (optional)"
-                            }
+                            "subject": {"type": "string", "description": "Event subject/title"},
+                            "start_datetime": {"type": "string", "description": "Start datetime (ISO format)"},
+                            "end_datetime": {"type": "string", "description": "End datetime (ISO format)"},
+                            "description": {"type": "string", "description": "Event description (optional)"},
                         },
-                        "required": ["subject", "start_datetime", "end_datetime"]
-                    }
+                        "required": ["subject", "start_datetime", "end_datetime"],
+                    },
                 ),
                 Tool(
                     name="search_users",
@@ -111,18 +100,15 @@ class GaroonMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query (user name, email, etc.)"
-                            },
+                            "query": {"type": "string", "description": "Search query (user name, email, etc.)"},
                             "limit": {
                                 "type": "integer",
                                 "description": "Maximum number of results to return",
-                                "default": 20
-                            }
+                                "default": 20,
+                            },
                         },
-                        "required": ["query"]
-                    }
+                        "required": ["query"],
+                    },
                 ),
                 Tool(
                     name="find_available_time",
@@ -130,40 +116,31 @@ class GaroonMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "user_id": {
-                                "type": "string",
-                                "description": "Other user's Garoon user ID"
-                            },
-                            "start_date": {
-                                "type": "string",
-                                "description": "Search start date (YYYY-MM-DD format)"
-                            },
-                            "end_date": {
-                                "type": "string",
-                                "description": "Search end date (YYYY-MM-DD format)"
-                            },
+                            "user_id": {"type": "string", "description": "Other user's Garoon user ID"},
+                            "start_date": {"type": "string", "description": "Search start date (YYYY-MM-DD format)"},
+                            "end_date": {"type": "string", "description": "Search end date (YYYY-MM-DD format)"},
                             "duration_minutes": {
                                 "type": "integer",
-                                "description": "Required meeting duration in minutes"
+                                "description": "Required meeting duration in minutes",
                             },
                             "start_time": {
                                 "type": "string",
                                 "description": "Daily start time (HH:MM format, default: 09:00)",
-                                "default": "09:00"
+                                "default": "09:00",
                             },
                             "end_time": {
                                 "type": "string",
                                 "description": "Daily end time (HH:MM format, default: 18:00)",
-                                "default": "18:00"
+                                "default": "18:00",
                             },
                             "exclude_lunch": {
                                 "type": "boolean",
                                 "description": "Exclude lunch time 12:00-13:00 (default: true)",
-                                "default": True
-                            }
+                                "default": True,
+                            },
                         },
-                        "required": ["user_id", "start_date", "end_date", "duration_minutes"]
-                    }
+                        "required": ["user_id", "start_date", "end_date", "duration_minutes"],
+                    },
                 ),
                 Tool(
                     name="create_meeting",
@@ -171,35 +148,23 @@ class GaroonMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "subject": {
-                                "type": "string",
-                                "description": "Meeting subject/title"
-                            },
-                            "start_datetime": {
-                                "type": "string",
-                                "description": "Start datetime (ISO format)"
-                            },
-                            "end_datetime": {
-                                "type": "string",
-                                "description": "End datetime (ISO format)"
-                            },
+                            "subject": {"type": "string", "description": "Meeting subject/title"},
+                            "start_datetime": {"type": "string", "description": "Start datetime (ISO format)"},
+                            "end_datetime": {"type": "string", "description": "End datetime (ISO format)"},
                             "attendee_ids": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "List of attendee user IDs"
+                                "description": "List of attendee user IDs",
                             },
-                            "description": {
-                                "type": "string",
-                                "description": "Meeting description (optional)"
-                            }
+                            "description": {"type": "string", "description": "Meeting description (optional)"},
                         },
-                        "required": ["subject", "start_datetime", "end_datetime", "attendee_ids"]
-                    }
-                )
+                        "required": ["subject", "start_datetime", "end_datetime", "attendee_ids"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
-        async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+        async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             """Handle tool calls"""
             if not self.garoon_client:
                 raise Exception("Garoon client not initialized")
@@ -209,7 +174,7 @@ class GaroonMCPServer:
                     result = await self.garoon_client.get_schedule(
                         start_date=arguments["start_date"],
                         end_date=arguments["end_date"],
-                        user_id=arguments.get("user_id")
+                        user_id=arguments.get("user_id"),
                     )
                     return [TextContent(type="text", text=str(result))]
 
@@ -218,14 +183,13 @@ class GaroonMCPServer:
                         subject=arguments["subject"],
                         start_datetime=arguments["start_datetime"],
                         end_datetime=arguments["end_datetime"],
-                        description=arguments.get("description")
+                        description=arguments.get("description"),
                     )
                     return [TextContent(type="text", text=f"Schedule created: {schedule_result}")]
 
                 elif name == "search_users":
                     result = await self.garoon_client.search_users(
-                        query=arguments["query"],
-                        limit=arguments.get("limit", 20)
+                        query=arguments["query"], limit=arguments.get("limit", 20)
                     )
                     return [TextContent(type="text", text=str(result))]
 
@@ -237,7 +201,7 @@ class GaroonMCPServer:
                         duration_minutes=arguments["duration_minutes"],
                         start_time=arguments.get("start_time", "09:00"),
                         end_time=arguments.get("end_time", "18:00"),
-                        exclude_lunch=arguments.get("exclude_lunch", True)
+                        exclude_lunch=arguments.get("exclude_lunch", True),
                     )
                     return [TextContent(type="text", text=str(result))]
 
@@ -247,7 +211,7 @@ class GaroonMCPServer:
                         start_datetime=arguments["start_datetime"],
                         end_datetime=arguments["end_datetime"],
                         attendee_ids=arguments["attendee_ids"],
-                        description=arguments.get("description")
+                        description=arguments.get("description"),
                     )
                     return [TextContent(type="text", text=f"Meeting created: {meeting_result}")]
 
@@ -258,14 +222,11 @@ class GaroonMCPServer:
                 logger.error(f"Error executing tool {name}: {e}")
                 raise
 
+
 async def main() -> None:
     """Main entry point"""
-    import os
-    from dotenv import load_dotenv
-    
     # Load environment variables from .env file
     load_dotenv()
-    
     # Get configuration from environment variables
     base_url = os.getenv("GAROON_BASE_URL")
     g_username = os.getenv("GAROON_USERNAME")
@@ -288,20 +249,17 @@ async def main() -> None:
 
     # Initialize Garoon client with Garoon credentials
     await mcp_server.initialize(base_url, g_username, g_password, timezone)
-    
+
     try:
         # Run server with proper initialization options
         async with stdio_server() as (read_stream, write_stream):
             init_options = mcp_server.server.create_initialization_options()
-            await mcp_server.server.run(
-                read_stream,
-                write_stream,
-                init_options
-            )
+            await mcp_server.server.run(read_stream, write_stream, init_options)
     finally:
         # Ensure Garoon client is properly closed
         if mcp_server.garoon_client:
             await mcp_server.garoon_client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -4,8 +4,11 @@
 import asyncio
 import base64
 import os
+
 from dotenv import load_dotenv
+
 from garoon_client import GaroonClient
+
 
 async def test_garoon_auth():
     """Test Garoon authentication with X-Cybozu-Authorization header"""
@@ -22,13 +25,13 @@ async def test_garoon_auth():
         print(f"   GAROON_PASSWORD: {'*' * len(garoon_password) if garoon_password else None}")
         return
 
-    print(f"Testing Garoon authentication...")
+    print("Testing Garoon authentication...")
     print(f"Base URL: {base_url}")
     print(f"Garoon User: {garoon_username}")
 
     # Create Garoon token
     garoon_credentials = f"{garoon_username}:{garoon_password}"
-    garoon_token = base64.b64encode(garoon_credentials.encode('utf-8')).decode('utf-8')
+    garoon_token = base64.b64encode(garoon_credentials.encode("utf-8")).decode("utf-8")
 
     print(f"Garoon token: {garoon_token}")
 
@@ -41,7 +44,9 @@ async def test_garoon_auth():
 
         # Test a simple API call
         try:
-            apps = await client._make_request("GET", "/g/api/v1/schedule/events", params={'limit': 1, 'fields': 'id,subject'})
+            apps = await client._make_request(
+                "GET", "/g/api/v1/schedule/events", params={"limit": 1, "fields": "id,subject"}
+            )
             print(f"✅ API call successful, response: {str(apps)[:100]}...")
         except Exception as api_error:
             print(f"⚠️ API call failed: {api_error}")
@@ -50,8 +55,9 @@ async def test_garoon_auth():
 
     except Exception as e:
         print(f"❌ Authentication failed: {e}")
-        if 'client' in locals():
+        if "client" in locals():
             await client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(test_garoon_auth())

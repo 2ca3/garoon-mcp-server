@@ -4,8 +4,11 @@
 import asyncio
 import os
 from datetime import datetime
+
 from dotenv import load_dotenv
+
 from garoon_client import GaroonClient
+
 
 async def main():
     load_dotenv()
@@ -28,24 +31,21 @@ async def main():
     await client.authenticate()
 
     # 今日のスケジュール取得
-    events = await client.get_schedule(
-        start_date=today,
-        end_date=today
-    )
+    events = await client.get_schedule(start_date=today, end_date=today)
 
     if not events:
         print("今日の予定はありません")
     else:
         print(f"今日の予定: {len(events)}件\n")
         for i, event in enumerate(events, 1):
-            subject = event.get('subject', '件名なし')
-            event_id = event.get('id', 'N/A')
+            subject = event.get("subject", "件名なし")
+            event_id = event.get("id", "N/A")
 
             # 開始・終了時刻
-            start = event.get('start', {})
-            end = event.get('end', {})
-            start_time = start.get('dateTime', 'N/A')
-            end_time = end.get('dateTime', 'N/A')
+            start = event.get("start", {})
+            end = event.get("end", {})
+            start_time = start.get("dateTime", "N/A")
+            end_time = end.get("dateTime", "N/A")
 
             print(f"{i}. {subject}")
             print(f"   時間: {start_time} ～ {end_time}")
@@ -53,6 +53,7 @@ async def main():
             print()
 
     await client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Unit tests for meeting scheduler functionality"""
 
-import asyncio
-import os
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 from dotenv import load_dotenv
 
 from garoon_client import GaroonClient
@@ -22,11 +21,7 @@ class TestFindAvailableTime:
     @pytest_asyncio.fixture
     async def mock_client(self):
         """Create a mock Garoon client"""
-        client = GaroonClient(
-            base_url="https://test.cybozu.com",
-            g_username="test_user",
-            g_password="test_password"
-        )
+        client = GaroonClient(base_url="https://test.cybozu.com", g_username="test_user", g_password="test_password")
         client.session = AsyncMock()
         client.authenticated = True
         return client
@@ -38,12 +33,9 @@ class TestFindAvailableTime:
         mock_my_schedule = []
         mock_other_schedule = []
 
-        with patch.object(mock_client, 'get_schedule', side_effect=[mock_my_schedule, mock_other_schedule]):
+        with patch.object(mock_client, "get_schedule", side_effect=[mock_my_schedule, mock_other_schedule]):
             result = await mock_client.find_available_time(
-                user_id="123",
-                start_date="2025-01-15",
-                end_date="2025-01-15",
-                duration_minutes=60
+                user_id="123", start_date="2025-01-15", end_date="2025-01-15", duration_minutes=60
             )
 
             # Should return available slots from 9:00 AM
@@ -60,7 +52,7 @@ class TestFindAvailableTime:
                 "id": "1",
                 "subject": "My Meeting",
                 "start": {"dateTime": "2025-01-15T10:00:00+09:00"},
-                "end": {"dateTime": "2025-01-15T11:00:00+09:00"}
+                "end": {"dateTime": "2025-01-15T11:00:00+09:00"},
             }
         ]
         mock_other_schedule = [
@@ -68,16 +60,13 @@ class TestFindAvailableTime:
                 "id": "2",
                 "subject": "Their Meeting",
                 "start": {"dateTime": "2025-01-15T14:00:00+09:00"},
-                "end": {"dateTime": "2025-01-15T15:00:00+09:00"}
+                "end": {"dateTime": "2025-01-15T15:00:00+09:00"},
             }
         ]
 
-        with patch.object(mock_client, 'get_schedule', side_effect=[mock_my_schedule, mock_other_schedule]):
+        with patch.object(mock_client, "get_schedule", side_effect=[mock_my_schedule, mock_other_schedule]):
             result = await mock_client.find_available_time(
-                user_id="123",
-                start_date="2025-01-15",
-                end_date="2025-01-15",
-                duration_minutes=60
+                user_id="123", start_date="2025-01-15", end_date="2025-01-15", duration_minutes=60
             )
 
             # Should return available slots avoiding the conflicts
@@ -98,13 +87,9 @@ class TestFindAvailableTime:
         mock_my_schedule = []
         mock_other_schedule = []
 
-        with patch.object(mock_client, 'get_schedule', side_effect=[mock_my_schedule, mock_other_schedule]):
+        with patch.object(mock_client, "get_schedule", side_effect=[mock_my_schedule, mock_other_schedule]):
             result = await mock_client.find_available_time(
-                user_id="123",
-                start_date="2025-01-15",
-                end_date="2025-01-15",
-                duration_minutes=60,
-                exclude_lunch=True
+                user_id="123", start_date="2025-01-15", end_date="2025-01-15", duration_minutes=60, exclude_lunch=True
             )
 
             # Should not suggest slots during 12:00-13:00
@@ -121,12 +106,9 @@ class TestFindAvailableTime:
         mock_my_schedule = []
         mock_other_schedule = []
 
-        with patch.object(mock_client, 'get_schedule', side_effect=[mock_my_schedule, mock_other_schedule]):
+        with patch.object(mock_client, "get_schedule", side_effect=[mock_my_schedule, mock_other_schedule]):
             result = await mock_client.find_available_time(
-                user_id="123",
-                start_date="2025-01-15",
-                end_date="2025-01-15",
-                duration_minutes=30
+                user_id="123", start_date="2025-01-15", end_date="2025-01-15", duration_minutes=30
             )
 
             # Should return maximum 3 slots
@@ -138,14 +120,14 @@ class TestFindAvailableTime:
         mock_my_schedule = []
         mock_other_schedule = []
 
-        with patch.object(mock_client, 'get_schedule', side_effect=[mock_my_schedule, mock_other_schedule]):
+        with patch.object(mock_client, "get_schedule", side_effect=[mock_my_schedule, mock_other_schedule]):
             result = await mock_client.find_available_time(
                 user_id="123",
                 start_date="2025-01-15",
                 end_date="2025-01-15",
                 duration_minutes=60,
                 start_time="10:00",
-                end_time="16:00"
+                end_time="16:00",
             )
 
             # All slots should be within custom business hours
@@ -163,11 +145,7 @@ class TestCreateMeeting:
     @pytest_asyncio.fixture
     async def mock_client(self):
         """Create a mock Garoon client"""
-        client = GaroonClient(
-            base_url="https://test.cybozu.com",
-            g_username="test_user",
-            g_password="test_password"
-        )
+        client = GaroonClient(base_url="https://test.cybozu.com", g_username="test_user", g_password="test_password")
         client.session = AsyncMock()
         client.authenticated = True
         return client
@@ -179,15 +157,15 @@ class TestCreateMeeting:
             "id": "999",
             "subject": {"value": "Test Meeting"},
             "start": {"dateTime": "2025-01-15T14:00:00+09:00"},
-            "end": {"dateTime": "2025-01-15T15:00:00+09:00"}
+            "end": {"dateTime": "2025-01-15T15:00:00+09:00"},
         }
 
-        with patch.object(mock_client, '_make_request', return_value=mock_response):
+        with patch.object(mock_client, "_make_request", return_value=mock_response):
             result = await mock_client.create_meeting(
                 subject="Test Meeting",
                 start_datetime="2025-01-15T14:00:00+09:00",
                 end_datetime="2025-01-15T15:00:00+09:00",
-                attendee_ids=["123", "456"]
+                attendee_ids=["123", "456"],
             )
 
             assert result["id"] == "999"
@@ -199,16 +177,16 @@ class TestCreateMeeting:
         mock_response = {
             "id": "999",
             "subject": {"value": "Test Meeting"},
-            "notes": {"value": "This is a test meeting"}
+            "notes": {"value": "This is a test meeting"},
         }
 
-        with patch.object(mock_client, '_make_request', return_value=mock_response):
+        with patch.object(mock_client, "_make_request", return_value=mock_response):
             result = await mock_client.create_meeting(
                 subject="Test Meeting",
                 start_datetime="2025-01-15T14:00:00+09:00",
                 end_datetime="2025-01-15T15:00:00+09:00",
                 attendee_ids=["123"],
-                description="This is a test meeting"
+                description="This is a test meeting",
             )
 
             assert result["id"] == "999"
@@ -219,19 +197,15 @@ class TestCreateMeeting:
         """Test meeting creation with multiple attendees"""
         mock_response = {
             "id": "999",
-            "attendees": [
-                {"type": "USER", "id": "123"},
-                {"type": "USER", "id": "456"},
-                {"type": "USER", "id": "789"}
-            ]
+            "attendees": [{"type": "USER", "id": "123"}, {"type": "USER", "id": "456"}, {"type": "USER", "id": "789"}],
         }
 
-        with patch.object(mock_client, '_make_request', return_value=mock_response):
+        with patch.object(mock_client, "_make_request", return_value=mock_response):
             result = await mock_client.create_meeting(
                 subject="Team Meeting",
                 start_datetime="2025-01-15T14:00:00+09:00",
                 end_datetime="2025-01-15T15:00:00+09:00",
-                attendee_ids=["123", "456", "789"]
+                attendee_ids=["123", "456", "789"],
             )
 
             assert result["id"] == "999"
@@ -243,7 +217,6 @@ class TestMCPServerIntegration:
 
     def test_mcp_server_has_meeting_tools(self):
         """Test that MCP server has meeting scheduler tools"""
-        from main import GaroonMCPServer
 
         server = GaroonMCPServer()
         server.setup_handlers()
@@ -253,7 +226,6 @@ class TestMCPServerIntegration:
 
     def test_tool_structure(self):
         """Test that tool definitions are structured correctly"""
-        from main import GaroonMCPServer
 
         server = GaroonMCPServer()
         server.setup_handlers()

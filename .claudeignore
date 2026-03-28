@@ -1,0 +1,74 @@
+# ===============================
+# Claude Code 参考用 .claudeignore
+# 各プロジェクトで必要に応じて追加・削除してください
+# ===============================
+
+# ---- 機密ファイル（必ず無視させたいもの） ----
+.env
+.env.*
+*.env
+*.secret
+*.secrets
+secrets/*
+config/credentials/*
+**/*token*
+**/*key*
+**/.ssh/*
+id_rsa
+id_ed25519
+
+# ---- ビルド成果物 ----
+dist/
+build/
+out/
+target/
+public/build/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+reports/
+
+# ---- パッケージ管理の生成物 ----
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+vendor/
+.venv/
+__pycache__/
+*.pyc
+
+# ---- ログ / 一時ファイル ----
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# ---- エディタ/IDE固有 ----
+.vscode/
+.idea/
+*.swp
+
+# ---- テスト関連 ----
+coverage/
+test-results/
+junit.xml
+
+# ---- 大きいファイル（AI に読み込ませたくない類） ----
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mov
+*.zip
+*.tar
+*.gz
+*.7z
+
+# ---- ドキュメント生成系 ----
+docs/.vitepress/cache/
+.storybook/
+storybook-static/

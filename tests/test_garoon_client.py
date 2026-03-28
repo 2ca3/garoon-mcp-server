@@ -201,6 +201,272 @@ class TestFindAvailableTimeWithTimezone:
 
 
 @pytest.mark.asyncio
+class TestCreateSchedule:
+    """create_schedule のテスト"""
+
+    async def test_create_schedule_request_body_structure(self):
+        """create_schedule のリクエストボディ構造がAPI仕様に準拠していること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+            timezone="Asia/Tokyo",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "new-event-1"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_schedule(
+                subject="テストイベント",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+            )
+
+            mock_request.assert_called_once()
+            body = mock_request.call_args.kwargs["json"]
+            # subject は文字列直接
+            assert body["subject"] == "テストイベント"
+            assert body["eventType"] == "REGULAR"
+            # start/end は dateTime と timeZone を持つオブジェクト
+            assert body["start"]["dateTime"] == "2025-01-15T10:00:00+09:00"
+            assert body["start"]["timeZone"] == "Asia/Tokyo"
+            assert body["end"]["dateTime"] == "2025-01-15T11:00:00+09:00"
+            assert body["end"]["timeZone"] == "Asia/Tokyo"
+            # ログインユーザーが attendees に自動追加されること
+            assert {"type": "USER", "code": "login_user"} in body["attendees"]
+
+    async def test_create_schedule_login_user_auto_added_as_attendee(self):
+        """ログインユーザーが attendees に自動追加されること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "mycode"
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {"id": "event-x"}
+
+            await client.create_schedule(
+                subject="個人予定",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert body["attendees"] == [{"type": "USER", "code": "mycode"}]
+
+    async def test_create_schedule_with_description(self):
+        """description を指定した場合に notes が含まれること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "event-2"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_schedule(
+                subject="会議",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+                description="議題: Q1目標",
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert body["notes"] == "議題: Q1目標"
+            assert body["eventType"] == "REGULAR"
+
+    async def test_create_schedule_with_event_menu(self):
+        """event_menu を指定した場合に eventMenu が含まれること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "event-3"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_schedule(
+                subject="外出",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+                event_menu="外出",
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert body["eventMenu"] == "外出"
+
+    async def test_create_schedule_without_event_menu(self):
+        """event_menu を省略した場合に eventMenu が含まれないこと"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "event-4"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_schedule(
+                subject="会議",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert "eventMenu" not in body
+
+
+@pytest.mark.asyncio
+class TestCreateMeeting:
+    """create_meeting のテスト"""
+
+    async def test_create_meeting_request_body_structure(self):
+        """create_meeting のリクエストボディ構造がAPI仕様に準拠していること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+            timezone="Asia/Tokyo",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "meeting-1"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_meeting(
+                subject="チームMTG",
+                start_datetime="2025-01-15T14:00:00+09:00",
+                end_datetime="2025-01-15T15:00:00+09:00",
+                attendee_ids=["1", "2"],
+            )
+
+            mock_request.assert_called_once()
+            body = mock_request.call_args.kwargs["json"]
+            # subject は文字列直接
+            assert body["subject"] == "チームMTG"
+            assert body["eventType"] == "REGULAR"
+            # start/end は dateTime と timeZone を持つオブジェクト
+            assert body["start"]["timeZone"] == "Asia/Tokyo"
+            assert body["end"]["timeZone"] == "Asia/Tokyo"
+
+    async def test_create_meeting_includes_attendees(self):
+        """create_meeting のリクエストに attendees が含まれること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "meeting-2"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_meeting(
+                subject="1on1",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T10:30:00+09:00",
+                attendee_ids=["100", "200"],
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert {"type": "USER", "code": "login_user"} in body["attendees"]
+            assert {"type": "USER", "code": "100"} in body["attendees"]
+            assert {"type": "USER", "code": "200"} in body["attendees"]
+
+    async def test_create_meeting_login_user_not_duplicated(self):
+        """ログインユーザーが attendee_ids に含まれている場合、重複して追加されないこと"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {"id": "meeting-x"}
+
+            await client.create_meeting(
+                subject="MTG",
+                start_datetime="2025-01-15T10:00:00+09:00",
+                end_datetime="2025-01-15T11:00:00+09:00",
+                attendee_ids=["login_user", "other_user"],
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            codes = [a["code"] for a in body["attendees"]]
+            assert codes.count("login_user") == 1
+
+    async def test_create_meeting_with_event_menu(self):
+        """event_menu を指定した場合に eventMenu が含まれること"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "meeting-3"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_meeting(
+                subject="定例会議",
+                start_datetime="2025-01-15T14:00:00+09:00",
+                end_datetime="2025-01-15T15:00:00+09:00",
+                attendee_ids=["1"],
+                event_menu="会議",
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert body["eventMenu"] == "会議"
+
+    async def test_create_meeting_without_event_menu(self):
+        """event_menu を省略した場合に eventMenu が含まれないこと"""
+        client = GaroonClient(
+            base_url="https://test.cybozu.com",
+            g_username="test@example.com",
+            g_password="password",
+        )
+        client._login_user_code = "login_user"
+
+        mock_response = {"id": "meeting-4"}
+
+        with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+
+            await client.create_meeting(
+                subject="MTG",
+                start_datetime="2025-01-15T14:00:00+09:00",
+                end_datetime="2025-01-15T15:00:00+09:00",
+                attendee_ids=["1"],
+            )
+
+            body = mock_request.call_args.kwargs["json"]
+            assert "eventMenu" not in body
+
+
+@pytest.mark.asyncio
 class TestTimezoneConversionBoundary:
     """タイムゾーン変換の境界ケーステスト"""
 

@@ -9,15 +9,14 @@ A Model Context Protocol (MCP) server that provides integration with Garoon (Cyb
 - **スケジュール管理 / Schedule Management**:
   - 自分のスケジュールの閲覧・作成
   - 他のユーザーのスケジュール閲覧（targetTypeパラメータ対応）
-- **会議スケジューラー / Meeting Scheduler** 🆕:
+  - イベントメニュー（種別）の指定対応
+- **会議スケジューラー / Meeting Scheduler**:
   - 空き時間の自動検索（自分と相手の両方が空いている時間を検出）
   - 参加者付きで会議を自動設定
   - 営業時間・昼休みの考慮
 - **ユーザー検索 / User Search**:
   - 名前やメールアドレスでユーザーを検索
   - 他ユーザーのスケジュール確認に必要なユーザーIDの取得
-- **メッセージシステム / Message System**: Garoonを通じたメッセージの送受信
-- **アプリケーションアクセス / Application Access**: 利用可能なGaroonアプリケーションの一覧
 
 ## 必要要件 / Requirements
 
@@ -223,28 +222,16 @@ Parameters:
 **注意**: `user_id`を指定する場合、内部的に`targetType="user"`パラメータが自動的に追加されます。
 
 #### create_schedule
-Create a new schedule event in Garoon.
+新しいスケジュールイベントを作成します / Create a new schedule event in Garoon.
 
 Parameters:
-- `subject` (required): Event subject/title
-- `start_datetime` (required): Start datetime in ISO format
-- `end_datetime` (required): End datetime in ISO format
-- `description` (optional): Event description
+- `subject` (required): イベントのタイトル / Event subject/title
+- `start_datetime` (required): 開始日時 (ISO形式) / Start datetime in ISO format
+- `end_datetime` (required): 終了日時 (ISO形式) / End datetime in ISO format
+- `description` (optional): イベントの説明 / Event description
+- `event_menu` (optional): イベントメニュー（例: "会議", "外出"）/ Event menu/category. Defaults to "-----" if omitted.
 
-#### get_messages
-Get messages from Garoon.
-
-Parameters:
-- `folder` (required): Message folder (inbox, sent, etc.)
-- `limit` (optional): Maximum number of messages to retrieve (default: 20)
-
-#### send_message
-Send a message through Garoon.
-
-Parameters:
-- `to` (required): Array of recipient user IDs
-- `subject` (required): Message subject
-- `body` (required): Message body
+**注意**: ログインユーザー（`GAROON_USERNAME`）が自動的に参加者として追加されます。
 
 #### search_users
 Garoonのユーザーを名前やその他の条件で検索します / Search for users in Garoon by name or other criteria.
@@ -269,7 +256,7 @@ Parameters:
 
 **戻り値**: 最大3件の空き時間候補（開始・終了時刻）
 
-#### create_meeting 🆕
+#### create_meeting
 参加者付きで会議スケジュールを作成します / Create a meeting with attendees.
 
 Parameters:
@@ -278,8 +265,9 @@ Parameters:
 - `end_datetime` (required): 終了日時 (ISO形式) / End datetime (ISO format)
 - `attendee_ids` (required): 参加者のユーザーIDリスト / List of attendee user IDs
 - `description` (optional): 会議の説明 / Meeting description
+- `event_menu` (optional): イベントメニュー（例: "会議", "外出"）/ Event menu/category. Defaults to "-----" if omitted.
 
-**注意**: 参加者は自動的に会議に追加されます。
+**注意**: ログインユーザー（`GAROON_USERNAME`）が自動的に参加者の先頭に追加されます。`attendee_ids` に含まれている場合は重複しません。
 
 ## トラブルシューティング / Troubleshooting
 
@@ -317,19 +305,16 @@ Parameters:
 
 ```
 garoon-mcp-server/
-├── main.py                  # MCPサーバのメインエントリーポイント
-├── garoon_client.py         # Garoon APIクライアント
-├── test_auth.py             # 認証テストスクリプト
-├── test_user_schedule.py    # ユーザー検索とスケジュール取得のテスト
-├── test_meeting_scheduler.py # 会議スケジューラーのテスト 🆕
-├── pyproject.toml           # プロジェクト設定と依存関係
-├── uv.lock                  # 依存関係のロックファイル
-├── Dockerfile               # Dockerイメージ設定
-├── .dockerignore            # Docker除外設定
-├── .env                     # 環境変数（gitに含めない）
-├── .env.example             # 環境変数のテンプレート
-├── .gitignore               # Git除外設定
-└── README.md                # このファイル
+├── main.py                        # MCPサーバのメインエントリーポイント
+├── garoon_client.py               # Garoon APIクライアント
+├── tests/
+│   ├── test_main.py               # MCPツールのユニットテスト
+│   └── test_garoon_client.py      # Garoon APIクライアントのユニットテスト
+├── pyproject.toml                 # プロジェクト設定と依存関係
+├── .env                           # 環境変数（gitに含めない）
+├── .env.example                   # 環境変数のテンプレート
+├── .gitignore                     # Git除外設定
+└── README.md                      # このファイル
 ```
 
 ## 開発 / Development
@@ -367,7 +352,20 @@ uv run pytest
 
 ## 変更履歴 / Changelog
 
-### v0.2.0 (会議スケジューラー機能追加) 🆕
+### v0.3.0
+
+**追加された機能:**
+- ✅ `eventMenu`パラメーター対応（`create_schedule` / `create_meeting`）
+- ✅ ログインユーザーを自動的に参加者に追加（`GAROON_USERNAME`を使用）
+- ✅ `create_meeting`の重複参加者排除
+
+**バグ修正:**
+- `eventType`の値を正しい`"REGULAR"`に修正（誤: `"NORMAL"`）
+- `subject` / `notes`のリクエスト形式をAPI仕様に準拠（文字列直接）
+- `start` / `end`に`timeZone`フィールドを追加
+- `attendees`の`id`フィールドを正しい`code`フィールドに修正
+
+### v0.2.0
 
 **追加された機能:**
 - ✅ 空き時間自動検索機能（`find_available_time`ツール）
@@ -375,32 +373,15 @@ uv run pytest
   - 営業時間・昼休みの考慮
   - 最大3件の候補を提示
 - ✅ 参加者付き会議作成（`create_meeting`ツール）
-  - 複数の参加者を指定可能
-  - 自動的に参加者を会議に追加
-- ✅ 包括的なユニットテスト（test_meeting_scheduler.py）
+- ✅ タイムゾーン指定対応（`GAROON_TIMEZONE`環境変数）
 
-**技術的な改善:**
-- Garoon REST APIの参加者設定機能の実装
-- 空き時間計算アルゴリズムの実装
-- タイムゾーン処理の対応
-
-### v0.1.0 (初回リリース)
+### v0.1.0
 
 **追加された機能:**
 - ✅ Garoon REST API統合（X-Cybozu-Authorization認証）
 - ✅ スケジュール管理（取得・作成）
 - ✅ ユーザー検索機能（`search_users`ツール）
 - ✅ 他ユーザーのスケジュール確認（`targetType`パラメータ対応）
-- ✅ メッセージシステム（送受信）
-- ✅ 包括的なユニットテスト
-- ✅ 型チェック対応（mypy）
-- ✅ `uv`パッケージマネージャーサポート
-
-**技術的な改善:**
-- Garoon REST APIの正しいエンドポイント使用（`/g/api/v1/base/users`）
-- `targetType`パラメータの自動設定による他ユーザースケジュール取得
-- 非同期処理による高速なAPI呼び出し
-- エラーハンドリングとログ機能の実装
 
 ## ライセンス / License
 

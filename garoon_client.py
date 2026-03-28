@@ -48,6 +48,7 @@ class GaroonClient:
 
         self.session: aiohttp.ClientSession | None = None
         self.authenticated = False
+        self._login_user_code: str = g_username
 
         # Create Garoon token like GAS example: base64Encode(username + ':' + password)
         g_credentials = f"{g_username}:{g_password}"
@@ -163,7 +164,12 @@ class GaroonClient:
         return events
 
     async def create_schedule(
-        self, subject: str, start_datetime: str, end_datetime: str, description: str | None = None
+        self,
+        subject: str,
+        start_datetime: str,
+        end_datetime: str,
+        description: str | None = None,
+        event_menu: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new schedule event
@@ -173,20 +179,27 @@ class GaroonClient:
             start_datetime: Start datetime in ISO format
             end_datetime: End datetime in ISO format
             description: Optional event description
+            event_menu: Optional event menu/category (e.g. "conference"). Defaults to "-----" if omitted.
 
         Returns:
             Created event information
         """
         endpoint = "/g/api/v1/schedule/events"
 
-        event_data = {
-            "subject": {"value": subject},
-            "start": {"dateTime": start_datetime},
-            "end": {"dateTime": end_datetime},
+        tz_name = str(self.timezone)
+        event_data: dict[str, Any] = {
+            "subject": subject,
+            "eventType": "REGULAR",
+            "start": {"dateTime": start_datetime, "timeZone": tz_name},
+            "end": {"dateTime": end_datetime, "timeZone": tz_name},
+            "attendees": [{"type": "USER", "code": self._login_user_code}],
         }
 
         if description:
-            event_data["notes"] = {"value": description}
+            event_data["notes"] = description
+
+        if event_menu:
+            event_data["eventMenu"] = event_menu
 
         response = await self._make_request("POST", endpoint, json=event_data)
         return response
@@ -363,6 +376,7 @@ class GaroonClient:
         end_datetime: str,
         attendee_ids: list[str],
         description: str | None = None,
+        event_menu: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a meeting with attendees
@@ -373,24 +387,32 @@ class GaroonClient:
             end_datetime: End datetime in ISO format
             attendee_ids: List of attendee user IDs
             description: Optional meeting description
+            event_menu: Optional event menu/category (e.g. "conference"). Defaults to "-----" if omitted.
 
         Returns:
             Created meeting information
         """
         endpoint = "/g/api/v1/schedule/events"
 
-        # Build attendees list
-        attendees = [{"type": "USER", "id": user_id} for user_id in attendee_ids]
+        tz_name = str(self.timezone)
+        # ログインユーザーを先頭に追加し、指定された参加者を続ける（重複は除外）
+        login_code = self._login_user_code
+        attendees: list[dict[str, str]] = [{"type": "USER", "code": login_code}]
+        attendees.extend([{"type": "USER", "code": uid} for uid in attendee_ids if uid != login_code])
 
         event_data: dict[str, Any] = {
-            "subject": {"value": subject},
-            "start": {"dateTime": start_datetime},
-            "end": {"dateTime": end_datetime},
+            "subject": subject,
+            "eventType": "REGULAR",
+            "start": {"dateTime": start_datetime, "timeZone": tz_name},
+            "end": {"dateTime": end_datetime, "timeZone": tz_name},
             "attendees": attendees,
         }
 
         if description:
-            event_data["notes"] = {"value": description}
+            event_data["notes"] = description
+
+        if event_menu:
+            event_data["eventMenu"] = event_menu
 
         response = await self._make_request("POST", endpoint, json=event_data)
         return response
